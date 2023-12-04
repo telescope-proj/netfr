@@ -4,17 +4,20 @@
 # Compiled Object files
 *.slo
 *.lo
+*.ko
 *.o
 *.obj
+*.elf
 
 # Precompiled Headers
 *.gch
 *.pch
 
 # Compiled Dynamic libraries
-*.so
-*.dylib
 *.dll
+*.so
+*.so.*
+*.dylib
 
 # Fortran module files
 *.mod
@@ -25,8 +28,56 @@
 *.la
 *.a
 *.lib
+*.lo
 
 # Executables
 *.exe
 *.out
 *.app
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+*.btr
+*.log
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+.vs
+.vscode
+.profile
+.history
+*_build
+_BUILD
+_build
+build/
+!docs/Makefile
