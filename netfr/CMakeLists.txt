@@ -1,13 +1,11 @@
 cmake_minimum_required(VERSION 3.5)
 project(netfr LANGUAGES C CXX)
 
-get_filename_component(PROJECT_TOP "${PROJECT_SOURCE_DIR}/../.." ABSOLUTE)
-
 include_directories(
   ${PROJECT_SOURCE_DIR}/include
 )
 
-add_subdirectory("${PROJECT_TOP}/tcm/tcm" "${CMAKE_BINARY_DIR}/tcm")
+add_subdirectory("${PROJECT_SOURCE_DIR}/../tcm/tcm" "${CMAKE_BINARY_DIR}/tcm")
   
 set(NETFR_SOURCES
 src/nfr_client.cpp
