@@ -4,6 +4,7 @@
 
 #include "tcm_conn.h"
 #include "tcm_fabric.h"
+#include "tcm_exception.h"
 
 #include "nfr_client.hpp"
 #include "nfr_protocol.h"
@@ -97,6 +98,8 @@ static void clientFrameChSetup(tcm_client_dynamic_param * p,
   if (ret < 0)
     throw tcm_exception(-ret, __FILE__, __LINE__,
                         "Could not send connection setup response");
+
+  *ep_out = ep;
 }
 
 int NFRClientCreate(NFRClientOpts & opts, NFRClientResource & out) {
@@ -162,17 +165,17 @@ int NFRClientCreate(NFRClientOpts & opts, NFRClientResource & out) {
 
     ret = tcm_client_dynamic(&p);
     free(prv.params);
-    if (ret < 0)
+    if (ret < 0) {
       return ret;
+    }
 
     clientFrameChSetup(&p, &out.ep_frame, &out.peer_frame);
     out.fabric   = p.fabric_out;
     out.ep_msg   = p.ep_out;
     out.peer_msg = p.peer_out;
   } catch (tcm_exception & e) {
-    char * d = e.full_desc();
-    tcm__log_debug("%s", d);
-    free(d);
+    std::string desc = e.full_desc();
+    tcm__log_error("%s", desc.c_str());
     return -e.return_code();
   }
   return 0;

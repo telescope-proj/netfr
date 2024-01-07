@@ -109,6 +109,24 @@ enum NFRFieldType {
   NFR_F_MAX = 255
 };
 
+static inline const char * nfrFieldTypeStr(uint8_t type) {
+  switch (type) {
+    case NFR_F_FEATURE_FLAGS: return "FEATURE_FLAGS";
+    case NFR_F_UUID: return "UUID";
+    case NFR_F_NAME: return "NAME";
+    case NFR_F_EXT_PROXIED: return "EXT_PROXIED";
+    case NFR_F_EXT_CPU_SOCKETS: return "EXT_CPU_SOCKETS";
+    case NFR_F_EXT_CPU_CORES: return "EXT_CPU_CORES";
+    case NFR_F_EXT_CPU_THREADS: return "EXT_CPU_THREADS";
+    case NFR_F_EXT_CAPTURE_METHOD: return "EXT_CAPTURE_METHOD";
+    case NFR_F_EXT_OS_ID: return "EXT_OS_ID";
+    case NFR_F_EXT_OS_NAME: return "EXT_OS_NAME";
+    case NFR_F_EXT_CPU_MODEL: return "EXT_CPU_MODEL";
+    case NFR_F_EXT_LINK_RATE: return "EXT_LINK_RATE";
+    default: return "?";
+  }
+}
+
 static const uint8_t nfrFieldLUT[][2] = {
     {NFR_F_FEATURE_FLAGS, NFR_PT_UINT8},
     {NFR_F_UUID, NFR_PT_BYTE},
@@ -121,6 +139,7 @@ static const uint8_t nfrFieldLUT[][2] = {
     {NFR_F_EXT_OS_ID, NFR_PT_UINT8},
     {NFR_F_EXT_OS_NAME, NFR_PT_CHAR},
     {NFR_F_EXT_CPU_MODEL, NFR_PT_CHAR},
+    {NFR_F_EXT_LINK_RATE, NFR_PT_UINT64},
     {NFR_F_INVALID, NFR_PT_INVALID}};
 
 /* Resolve a field type into its underlying data type */
@@ -268,6 +287,7 @@ struct NFRCursorMetadata {
 
   // Only set if buffer >= 0
 
+  uint8_t  format;    // Texture format (CursorType)
   uint16_t width;     // Width of the texture
   uint16_t height;    // Height of the texture
   uint32_t row_bytes; // Row length in bytes

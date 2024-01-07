@@ -57,11 +57,14 @@ void NFRHostMetadataConstructor::addField(NFRFieldType type, const void * data,
     else
       this->extend_buffers(size);
   }
+  tcm__log_trace("Adding field %s (%d), offset: %d, size: %d (%d) -> %d",
+                 nfrFieldTypeStr(type), type, this->used, size,
+                 size + sizeof(NFRField), this->used + size + sizeof(NFRField));
   NFRField * f = (NFRField *) ((uint8_t *) this->buffer + this->used);
   f->type      = (uint8_t) type;
   f->len       = size;
   memcpy(f->data, data, size);
-  this->used += size;
+  this->used += (size + sizeof(*f));
 }
 
 NFRField * NFRHostMetadataConstructor::getField(NFRFieldType type) {

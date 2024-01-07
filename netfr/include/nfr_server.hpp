@@ -6,12 +6,16 @@
 #include "tcm_fabric.h"
 
 struct NFRServerOpts {
-  const char * src_addr;    // Source address (beacon + fabric)
-  const char * src_port;    // Source port (beacon)
-  const char * transport;   // Libfabric transport name
-  const char * build_ver;   // User-specified build version
-  uint32_t     api_version; // Libfabric API version
-  int          timeout_ms;
+  const char *   src_addr;    // Source address (beacon + fabric)
+  const char *   src_port;    // Source port (beacon)
+  const char *   transport;   // Libfabric transport name
+  const char *   build_ver;   // User-specified build version
+  uint16_t       data_port;   // General data port number (big endian)
+  uint16_t       frame_port;  // Frame data port number (big endian)
+  uint32_t       api_version; // Libfabric API version
+  int            timeout_ms;  // Timeout in milliseconds
+  int            interval_us; // Polling interval in microseconds
+  volatile int * exit_flag;   // Termination flag
 };
 
 struct NFRServerResource {

@@ -99,6 +99,8 @@ static void serverFrameChSetup(tcm_accept_client_dynamic_param * p,
   if (memcmp(*mem, NETFR_MAGIC, sizeof(NETFR_MAGIC) - 1) != 0)
     throw tcm_exception(EPROTO, __FILE__, __LINE__,
                         "Peer sent invalid confirmation message (data)");
+
+  *ep_out = ep;
 }
 
 int NFRServerCreate(NFRServerOpts & opts, NFRServerResource & out) noexcept {
@@ -109,7 +111,7 @@ int NFRServerCreate(NFRServerOpts & opts, NFRServerResource & out) noexcept {
 
     ssize_t                     ret;
     std::vector<tcm_conn_hints> conn_h;
-    sockaddr_in6                src, dst;
+    sockaddr_in6                src;
 
     size_t size = sizeof(src);
     ret =
@@ -119,8 +121,8 @@ int NFRServerCreate(NFRServerOpts & opts, NFRServerResource & out) noexcept {
                           "Failed to convert source address");
 
     auto beacon = tcm_beacon(SA_CAST(&src));
-
     nfr_internal::FabricInfo hints;
+    nfr_internal::setPort(SA_CAST(&src), opts.data_port);
     hints.setSrc(SA_CAST(&src));
     hints.setProvider(opts.transport);
     hints.fii->fabric_attr->api_version = opts.api_version;
@@ -162,9 +164,8 @@ int NFRServerCreate(NFRServerOpts & opts, NFRServerResource & out) noexcept {
     out.ep_msg   = p.ep_out;
     out.peer_msg = p.fabric_peer_out;
   } catch (tcm_exception & e) {
-    char * d = e.full_desc();
-    tcm__log_debug("%s", d);
-    free(d);
+    std::string desc = e.full_desc();
+    tcm__log_error("%s", desc.c_str());
     return -e.return_code();
   }
   return 0;
