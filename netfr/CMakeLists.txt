@@ -1,27 +1,45 @@
 cmake_minimum_required(VERSION 3.5)
-project(netfr LANGUAGES C CXX)
+project(netfr LANGUAGES C)
 
-include_directories(
-  ${PROJECT_SOURCE_DIR}/include
-)
+include_directories(include)
 
-add_subdirectory("${PROJECT_SOURCE_DIR}/../tcm/tcm" "${CMAKE_BINARY_DIR}/tcm")
-  
 set(NETFR_SOURCES
-src/nfr_client.cpp
-src/nfr_server.cpp
-src/nfr_util.cpp
-src/nfr_vmsg.cpp
+  src/common/nfr.c
+  src/common/nfr_mem.c
+  src/common/nfr_log.c
+  src/common/nfr_resource.c
+
+  src/host/nfr_host_callback.c
+  src/host/nfr_host.c
+
+  src/client/nfr_client_callback.c
+  src/client/nfr_client.c
 )
-  
+
+add_compile_options(
+  "-Wall"
+  "-Werror"
+  "-Wstrict-prototypes"
+  "-Wfatal-errors"
+  "-ffast-math"
+  "-fdata-sections"
+  "-ffunction-sections"
+  "$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb>"
+  "-fsanitize=address"
+  "-fsanitize=undefined"
+)
+
+add_link_options(
+  "-fsanitize=address"
+  "-fsanitize=undefined"
+)
+
 add_library(netfr STATIC ${NETFR_SOURCES})
 
-set_property(TARGET netfr PROPERTY C_STANDARD   11)
-set_property(TARGET netfr PROPERTY CXX_STANDARD 11)
-target_link_libraries(netfr tcm)
+target_link_libraries(netfr PRIVATE fabric)
 target_include_directories(netfr
-  PUBLIC
-    include
-  PRIVATE
-    src
+	INTERFACE
+		include
+	PRIVATE
+		src
 )
