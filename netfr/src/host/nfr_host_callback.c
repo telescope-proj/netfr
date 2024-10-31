@@ -120,8 +120,9 @@ void nfr_HostProcessInternalRx(struct NFRFabricContext * ctx)
         assert(!"Message size is invalid");
         goto release_mbuf;
       }
-      ctx->state = CTX_STATE_HAS_DATA;
-      ctx->slot->serial = chan->rxSerial++;
+      ctx->state               = CTX_STATE_HAS_DATA;
+      ctx->slot->msgSerial     = msg->msgSerial;
+      ctx->slot->channelSerial = msg->channelSerial;
       return;
     }
     case NFR_MSG_HOST_DATA_ACK:

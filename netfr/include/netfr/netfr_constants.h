@@ -77,8 +77,15 @@ extern "C" {
    extra space for the non-protocol internal metadata to go */
 #define NETFR_MESSAGE_SLOT_META_SIZE 8
 
+/* The number of transmit credits, i.e., the number of messages that can be sent
+   before waiting for an acknowledgment. */
 #define NETFR_CREDIT_COUNT 60
 
+/* The number of reserved credits for internal operations. If the number of
+   credits falls below this level, functions such as nfrClientSendData and
+   nfrHostSendData will fail until all other ops are done, but the system will
+   still be able to process completion events and potentially increase the
+   credit count. */
 #define NETFR_RESERVED_CREDIT_COUNT 8
 
 enum

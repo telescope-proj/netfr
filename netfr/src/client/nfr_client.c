@@ -31,7 +31,7 @@
 /**
  * @brief Initiate the connection to the server. This is a non-blocking function
  *        that immediately returns; you must check the state of the EQ to see
- *        whether the connection was successful using nfr_CheckConnStateUp.
+ *        whether the connection was successful using nfr_CheckConnState.
  * 
  * @param res  Resource to use for the connection
  * @param tgt  Target address to connect to
@@ -218,14 +218,20 @@ int nfr_ClientGetOldestBufUpdate(struct NFRClientChannel * ch,
 
   int haveData = 0;
   uint32_t sub = 0;
-  evt->serial = (uint32_t) -1;
+  uint32_t limSerial = 0;
 
   for (int i = 0; i < NETFR_MAX_MEM_REGIONS; ++i)
   {
-    if (evt->serial > (((uint32_t) -1) - NETFR_MAX_MEM_REGIONS - 1))
-      sub = NETFR_MAX_MEM_REGIONS + 1;
+    struct NFRMemory * mem = ch->res->memRegions + i;
+    if (mem->state == MEM_STATE_HAS_DATA && mem->channelSerial > limSerial)
+      limSerial = mem->channelSerial;
   }
 
+  if (limSerial > ((uint32_t) -1) - 2048)
+    sub = 4096;
+  
+  limSerial = 0;
+  
   for (int i = 0; i < NETFR_MAX_MEM_REGIONS; ++i)
   {
     struct NFRMemory * mem = ch->res->memRegions + i;
@@ -233,14 +239,15 @@ int nfr_ClientGetOldestBufUpdate(struct NFRClientChannel * ch,
     {
       if (mem->state == MEM_STATE_HAS_DATA)
       {
-        if (!haveData || mem->serial - sub < evt->serial - sub)
+        if (!haveData || mem->channelSerial - sub < limSerial - sub)
         {
           evt->type          = NFR_CLIENT_EVENT_MEM_WRITE;
           evt->channelIndex  = ch - ch->parent->channels;
-          evt->serial        = mem->serial;
+          evt->serial        = mem->channelSerial;
           evt->memRegion     = mem;
           evt->payloadOffset = mem->payloadOffset;
           evt->payloadLength = mem->payloadLength;
+          limSerial          = mem->channelSerial;
           haveData = 1;
         }
       }
@@ -342,12 +349,14 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
   if (ch->res->connState != NFR_CONN_STATE_CONNECTED)
     return -ENOTCONN;
   
+  // If any buffers have been freed or newly allocated, resync them
   ret = nfr_ClientResyncBufs(client, index);
   if (ret < 0)
     return ret;
 
   struct NFRCompQueueEntry cqe;
   memset(&cqe, 0, sizeof(cqe));
+  
   // Process all completed operations
   ret = nfr_ResourceCQProcess(res, &cqe);
   if (ret < 0)
@@ -368,11 +377,8 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
   if (ret < 0)
     return ret;
 
-
   // Find the buffer updates first
-  ret = nfr_ClientGetOldestBufUpdate(ch, evt);
-  if (ret > 0)
-    return 1;
+  int bufRet = nfr_ClientGetOldestBufUpdate(ch, evt);
 
   // Then the regular messages
   struct NFRFabricContext * ctx = 0;
@@ -388,11 +394,29 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
         && msg->header.type == NFR_MSG_HOST_DATA
         && msg->length < NETFR_MESSAGE_MAX_PAYLOAD_SIZE)
     {
-      evt->type          = NFR_CLIENT_EVENT_DATA;
-      evt->channelIndex  = index;
-      evt->serial        = ctx->slot->serial;
-      evt->payloadLength = msg->length;
-      memcpy(evt->inlineData, msg->data, msg->length);
+      // Overflow compensation
+      uint32_t sub = 0;
+      if (ctx->slot->channelSerial > ((uint32_t) -1) - 2048)
+        sub = 4096;
+
+      // The message in the slot is older than the RDMA write buffer, return it
+      // instead
+      if (bufRet && ctx->slot->channelSerial - sub < evt->serial - sub)
+      {
+        memset(evt, 0, offsetof(struct NFRClientEvent, inlineData));
+        evt->type          = NFR_CLIENT_EVENT_DATA;
+        evt->channelIndex  = index;
+        evt->serial        = ctx->slot->channelSerial;
+        evt->payloadLength = msg->length;
+        evt->payloadOffset = 0;
+        memcpy(evt->inlineData, msg->data, msg->length);
+      }
+      else
+      {
+        // The buffer update is the newest, do not perform the message ack,
+        // instead return the buffer update
+        return 1;
+      }
     }
     else
     {
@@ -449,7 +473,8 @@ int nfrClientSendData(struct NFRClient * client, int channelID, const void * dat
   if (ch->res->txCredits < NETFR_RESERVED_CREDIT_COUNT)
   {
     NFR_LOG_DEBUG("No%scredits on channel %d", 
-              ch->res->txCredits < NETFR_RESERVED_CREDIT_COUNT ? " low-prio " : " ",
+              ch->res->txCredits < NETFR_RESERVED_CREDIT_COUNT ? " low-prio " 
+                                                               : " ",
               channelID);
     return -EAGAIN;
   }
@@ -463,7 +488,9 @@ int nfrClientSendData(struct NFRClient * client, int channelID, const void * dat
 
   struct NFRMsgClientData * msg = (struct NFRMsgClientData *) ctx->slot->data;
   nfr_SetHeader(&msg->header, NFR_MSG_CLIENT_DATA);
-  msg->length = length;
+  msg->length        = length;
+  msg->msgSerial     = ++ch->msgSerial;
+  msg->channelSerial = ++ch->channelSerial;
   memcpy(msg->data, data, length);
 
   struct NFR_CallbackInfo cbInfo = {0};
@@ -479,6 +506,8 @@ int nfrClientSendData(struct NFRClient * client, int channelID, const void * dat
   if (ret < 0)
   {
     NFR_RESET_CONTEXT(ctx);
+    --ch->msgSerial;
+    --ch->channelSerial;
     return ret;
   }
 
@@ -567,8 +596,10 @@ int nfrClientInit(const struct NFRInitOpts * opts,
     goto closeResources;
   }
 
-  res[0]->parentTopLevel = client;
-  res[1]->parentTopLevel = client;
+  for (int i = 0; i < NETFR_NUM_CHANNELS; ++i)
+  {
+    res[i]->parentTopLevel = client;
+  }
 
   for (int i = 0; i < NETFR_NUM_CHANNELS; ++i)
   {

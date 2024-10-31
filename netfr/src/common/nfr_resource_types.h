@@ -1,3 +1,23 @@
+/*
+ * Telescope Network Frame Relay System
+ *
+ * Copyright (c) 2023-2024 Tim Dettmar
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+ * Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
 #ifndef NFR_PRIVATE_RESOURCE_TYPES_H
 #define NFR_PRIVATE_RESOURCE_TYPES_H
 
@@ -54,7 +74,8 @@ struct NFRCompQueueEntry
 
 struct NFRDataSlot
 {
-  uint32_t serial;
+  uint32_t         msgSerial;
+  uint32_t         channelSerial;
   alignas(16) char data[0];
 };
 
@@ -70,7 +91,8 @@ struct NFRMemory
   void               * addr;
   struct fid_mr      * mr;
   uint64_t             size;
-  uint32_t             serial;
+  uint32_t             writeSerial;    // Message id relative to other writes
+  uint32_t             channelSerial;  // Message id relative to all messages
   uint32_t             payloadOffset;
   uint32_t             payloadLength;
   uint8_t              index;

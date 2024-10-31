@@ -222,7 +222,9 @@ int nfrHostSendData(struct NFRHost * host, int channelID, void * data,
 
   struct NFRMsgHostData * msg = (struct NFRMsgHostData *) ctx->slot->data;
   nfr_SetHeader(&msg->header, NFR_MSG_CLIENT_DATA);
-  msg->length = length;
+  msg->length        = length;
+  msg->channelSerial = ++ch->channelSerial;
+  msg->msgSerial     = ++ch->msgSerial;
   memcpy(msg->data, data, length);
 
   struct NFR_CallbackInfo cbInfo = {0};
@@ -236,8 +238,14 @@ int nfrHostSendData(struct NFRHost * host, int channelID, void * data,
 
   ssize_t ret = nfr_PostTransfer(res, &ti);
   if (ret < 0)
+  {
     NFR_RESET_CONTEXT(ctx);
+    --ch->msgSerial;
+    --ch->channelSerial;
+    return ret;
+  }
   
+  --ch->res->txCredits;
   return ret;
 }
 

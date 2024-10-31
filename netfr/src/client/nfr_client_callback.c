@@ -1,3 +1,23 @@
+/*
+ * Telescope Network Frame Relay System
+ *
+ * Copyright (c) 2023-2024 Tim Dettmar
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+ * Place, Suite 330, Boston, MA 02111-1307 USA
+ */
+
 #include "client/nfr_client_callback.h"
 
 #include "common/nfr_protocol.h"
@@ -53,14 +73,23 @@ void nfr_ClientProcessInternalRx(struct NFRFabricContext * ctx)
       mem->state         = MEM_STATE_HAS_DATA;
       mem->payloadOffset = update->payloadOffset;
       mem->payloadLength = update->payloadSize;
-      mem->serial        = chan->memSerial++;
+      mem->writeSerial   = update->writeSerial;
+      mem->channelSerial = update->channelSerial;
       NFR_RESET_CONTEXT(ctx);
       return;
     }
     case NFR_MSG_HOST_DATA:
     {
-      ctx->state = CTX_STATE_HAS_DATA;
-      ctx->slot->serial = chan->rxSerial++;
+      struct NFRMsgHostData * msg = (struct NFRMsgHostData *) hdr;
+      if (msg->length > NETFR_MESSAGE_MAX_PAYLOAD_SIZE || msg->length == 0)
+      {
+        assert(!"Invalid message length");
+        NFR_RESET_CONTEXT(ctx);
+        return;
+      }
+      ctx->state               = CTX_STATE_HAS_DATA;
+      ctx->slot->msgSerial     = msg->msgSerial;
+      ctx->slot->channelSerial = msg->channelSerial;
       return;
     }
     case NFR_MSG_CLIENT_DATA_ACK:

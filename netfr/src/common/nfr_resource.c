@@ -230,7 +230,7 @@ int nfr_ResourceCQProcess(struct NFRResource * res,
     // This goes to a specific handler for each operation type
     if (ctx->cbInfo.callback)
     {
-      NFR_LOG_DEBUG("Invoking callback for context %p", ctx);
+      NFR_LOG_TRACE("Invoking callback for context %p", ctx);
       ctx->cbInfo.callback(ctx);
       memset(&ctx->cbInfo, 0, sizeof(ctx->cbInfo));
     }
@@ -303,14 +303,29 @@ int nfr_ContextGetOldestMessage(struct NFRResource * res,
   int base = NFR_RX_SLOT_BASE(res->commBuf.info);
 
   int haveData = 0;
-  int minSerial = -1;
+  uint32_t limSerial = 0;
+  uint32_t sub = 0;
+
   for (int i = base; i < base + res->commBuf.info.rxSlots; ++i)
   {
-    if (res->commBuf.ctx[i].state == CTX_STATE_HAS_DATA)
+    struct NFRFabricContext * c = res->commBuf.ctx + i;
+    if (c->state == CTX_STATE_HAS_DATA && c->slot->channelSerial > limSerial)
+      limSerial = c->slot->channelSerial;
+  }
+
+  if (limSerial > ((uint32_t) -1) - 2048)
+    sub = 4096;
+  
+  limSerial = (uint32_t) -1;
+
+  for (int i = base; i < base + res->commBuf.info.rxSlots; ++i)
+  {
+    struct NFRFabricContext * c = res->commBuf.ctx + i;
+    if (c->state == CTX_STATE_HAS_DATA)
     {
-      if (!haveData || res->commBuf.ctx[i].slot->serial < minSerial)
+      if (!haveData || c->slot->channelSerial - sub < limSerial - sub)
       {
-        minSerial = res->commBuf.ctx[i].slot->serial;
+        limSerial = c->slot->channelSerial;
         *ctx = res->commBuf.ctx + i;
         haveData = 1;
       }
@@ -438,37 +453,6 @@ int nfr_ResourceOpenSingle(const struct NFRInitOpts * opts,
     ret = fi_fabric(tmp->fabric_attr, &res->fabric, &res);
     if (ret < 0)
       continue;
-
-    // struct fi_eq_attr eqAttr;
-    // memset(&eqAttr, 0, sizeof(eqAttr));
-    // eqAttr.wait_obj = FI_WAIT_UNSPEC;
-    // ret = fi_eq_open(res->fabric, &eqAttr, &res->eq, &res);
-    // if (ret < 0)
-    //   goto free_res_info;
-
-    // ret = fi_passive_ep(res->fabric, tmp, &res->pep, res);
-    // if (ret < 0)
-    // {
-    //   NFR_LOG_ERROR("Failed to create PEP: %s (%d)", 
-    //                 fi_strerror(-ret), ret);
-    //   return ret;
-    // }
-
-    // ret = fi_pep_bind(res->pep, &res->eq->fid, 0);
-    // if (ret < 0)
-    // {
-    //   NFR_LOG_ERROR("Failed to bind passive EP to event queue: %s (%d)", 
-    //                 fi_strerror(-ret), ret);
-    //   return ret;
-    // }
-
-    // ret = fi_listen(res->pep);
-    // if (ret < 0)
-    // {
-    //   NFR_LOG_ERROR("Failed to listen on passive EP: %s (%d)", 
-    //                 fi_strerror(-ret), ret);
-    //   return ret;
-    // }
     
     ret = fi_domain(res->fabric, info, &res->domain, &res);
     if (ret < 0)
@@ -628,7 +612,8 @@ int nfr_CommBufOpen(struct NFRResource * res,
   struct NFRDataSlot * slots = res->commBuf.memRegion->addr;
   for (int i = 0; i < NFR_TOTAL_SLOTS(*hints); ++i)
   {
-    slots[i].serial    = 0;
+    slots[i].channelSerial   = 0;
+    slots[i].msgSerial       = 0;
     res->commBuf.ctx[i].slot = (struct NFRDataSlot *) \
                          ((uint8_t *) slots + i * NETFR_MESSAGE_MAX_SIZE);
     res->commBuf.ctx[i].parentResource = res;
