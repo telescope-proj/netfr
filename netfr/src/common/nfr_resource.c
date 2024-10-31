@@ -293,8 +293,7 @@ int nfr_ResourceConsumeRxSlots(struct NFRResource * res,
  * 
  * @param ctx   Output pointer to the context of the oldest message
  * 
- * @return      The number of messages available (0/1) or a negative value for
- *              errors
+ * @return      The number of messages available (0/1)
  */
 int nfr_ContextGetOldestMessage(struct NFRResource * res,
                                 struct NFRFabricContext ** ctx)

@@ -378,52 +378,55 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
     return ret;
 
   // Find the buffer updates first
+  evt->serial = 0;
   int bufRet = nfr_ClientGetOldestBufUpdate(ch, evt);
 
   // Then the regular messages
   struct NFRFabricContext * ctx = 0;
   ret = nfr_ContextGetOldestMessage(ch->res, &ctx);
-  if (ret > 0)
+  
+  // No message
+  if (!ret && !bufRet)
+    return 0;
+
+  // Overflow compensation
+  uint32_t sub = 0;
+  uint32_t chSerial = ctx ? ctx->slot->channelSerial : 0;
+  if (chSerial > ((uint32_t) -1) - 2048
+      || evt->serial > ((uint32_t) -1) - 2048)
+    sub = 4096;
+
+  // Check for invalid serial set by the peer
+  if (ret && bufRet)
+  {
+    assert(evt->serial != ctx->slot->channelSerial);
+  }
+
+  // Buffer update is the only event or the oldest one
+  if (   (bufRet && !ret) 
+      || (bufRet && ret 
+          && (evt->serial - sub < ctx->slot->channelSerial - sub)))
+    return 1;
+  
+  // Message is the only event or the oldest one
+  if (   (ret && !bufRet)
+      || (ret && bufRet && (ctx->slot->channelSerial - sub < evt->serial - sub)))
   {
     struct NFRMsgHostData * msg = (struct NFRMsgHostData *) ctx->slot->data;
     
-    // This should have been checked by the context manager, but for debugging
-    // will add it here
-    if (memcmp(msg->header.magic, NETFR_MAGIC, 8) == 0
-        && msg->header.version == NETFR_VERSION
-        && msg->header.type == NFR_MSG_HOST_DATA
-        && msg->length < NETFR_MESSAGE_MAX_PAYLOAD_SIZE)
-    {
-      // Overflow compensation
-      uint32_t sub = 0;
-      if (ctx->slot->channelSerial > ((uint32_t) -1) - 2048)
-        sub = 4096;
+    // Context manager should catch these
+    assert(msg->length < NETFR_MESSAGE_MAX_PAYLOAD_SIZE);
+    assert(msg->channelSerial == ctx->slot->channelSerial);
+    assert(msg->msgSerial == ctx->slot->msgSerial);
 
-      // The message in the slot is older than the RDMA write buffer, return it
-      // instead
-      if (bufRet && ctx->slot->channelSerial - sub < evt->serial - sub)
-      {
-        memset(evt, 0, offsetof(struct NFRClientEvent, inlineData));
-        evt->type          = NFR_CLIENT_EVENT_DATA;
-        evt->channelIndex  = index;
-        evt->serial        = ctx->slot->channelSerial;
-        evt->payloadLength = msg->length;
-        evt->payloadOffset = 0;
-        memcpy(evt->inlineData, msg->data, msg->length);
-      }
-      else
-      {
-        // The buffer update is the newest, do not perform the message ack,
-        // instead return the buffer update
-        return 1;
-      }
-    }
-    else
-    {
-      assert(!"Invalid message received");
-      NFR_LOG_DEBUG("Invalid message received");
-      NFR_RESET_CONTEXT(ctx);
-    }
+    // Copy the message out of the context
+    memset(evt, 0, offsetof(struct NFRClientEvent, inlineData));
+    evt->type          = NFR_CLIENT_EVENT_DATA;
+    evt->channelIndex  = index;
+    evt->serial        = ctx->slot->channelSerial;
+    evt->payloadLength = msg->length;
+    evt->payloadOffset = 0;
+    memcpy(evt->inlineData, ctx->slot->data, msg->length);
 
     // Reuse the context to send the ack
     struct NFRMsgHostDataAck * ack = (struct NFRMsgHostDataAck *) ctx->slot->data;
@@ -441,15 +444,16 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
     ret = nfr_PostTransfer(res, &ti);
     if (ret < 0)
     {
-      NFR_RESET_CONTEXT(ctx);
+      NFR_LOG_WARNING("Failed to send ack: %s (%d)", fi_strerror(-ret), ret);
       return ret;
     }
 
-    NFR_LOG_DEBUG("Sent ack for message %u", evt->serial);
+    NFR_LOG_TRACE("Sent ack for message %u", evt->serial);
     return 1;
   }
 
-  return 0;
+  assert(!"Unreachable code");
+  abort();
 }
 
 int nfrClientSendData(struct NFRClient * client, int channelID, const void * data,
