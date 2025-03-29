@@ -206,7 +206,8 @@ PNFRMemory nfrClientAttachMemory(PNFRClient client, void * buffer,
 
   struct NFRResource * res = client->channels[index].res;
   return nfr_RdmaAttach(res, buffer, size,
-                        FI_READ | FI_WRITE | FI_REMOTE_WRITE, 1,
+                        FI_READ | FI_WRITE | FI_REMOTE_WRITE, 
+                        NFR_MEM_TYPE_USER_MANAGED,
                         MEM_STATE_AVAILABLE_UNSYNCED);
 }
 
@@ -272,7 +273,7 @@ int nfr_ClientResyncBufs(PNFRClient client, uint8_t index)
   for (int i = 0; i < NETFR_MAX_MEM_REGIONS; ++i)
   {   
     if (res->memRegions[i].state == MEM_STATE_AVAILABLE_UNSYNCED
-        && res->memRegions[i].extMem)
+        && res->memRegions[i].memType != NFR_MEM_TYPE_INTERNAL)
     {
       NFR_LOG_DEBUG("Syncing buffer %d state", i);
       
@@ -426,6 +427,7 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
     evt->serial        = ctx->slot->channelSerial;
     evt->payloadLength = msg->length;
     evt->payloadOffset = 0;
+    evt->udata         = msg->udata;
     memcpy(evt->inlineData, ctx->slot->data, msg->length);
 
     // Reuse the context to send the ack
@@ -456,8 +458,8 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt)
   abort();
 }
 
-int nfrClientSendData(struct NFRClient * client, int channelID, const void * data,
-                      uint32_t length)
+int nfrClientSendData(struct NFRClient * client, int channelID, 
+                      const void * data, uint32_t length, uint64_t udata)
 {
   assert(client);
   assert(data);
@@ -467,7 +469,7 @@ int nfrClientSendData(struct NFRClient * client, int channelID, const void * dat
   if (!client || !data || channelID < 0 || channelID >= NETFR_NUM_CHANNELS)
     return -EINVAL;
 
-  if (length >= NETFR_MESSAGE_MAX_PAYLOAD_SIZE)
+  if (length > NETFR_MESSAGE_MAX_PAYLOAD_SIZE)
   {
     NFR_LOG_DEBUG("Data too large: %u", length);
     return -ENOBUFS;
@@ -495,6 +497,7 @@ int nfrClientSendData(struct NFRClient * client, int channelID, const void * dat
   msg->length        = length;
   msg->msgSerial     = ++ch->msgSerial;
   msg->channelSerial = ++ch->channelSerial;
+  msg->udata         = udata;
   memcpy(msg->data, data, length);
 
   struct NFR_CallbackInfo cbInfo = {0};
@@ -519,7 +522,7 @@ int nfrClientSendData(struct NFRClient * client, int channelID, const void * dat
   return ret;
 }
 
-int nfrClientSessionInit(struct NFRClient * client)
+int nfrClientConnect(struct NFRClient * client)
 {
   assert(client);
   if (!client)

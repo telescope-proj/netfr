@@ -38,9 +38,9 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
   
   switch (ti->opType)
   {
-    /* For Libfabric MSG endpoints and RDMA RC endpoints, the message order is
+    /* When the FI_ORDER_SAW | FI_ORDER_SAS flags are set, the message order is
        preserved. The message confirming the write is immediately sent after the
-       write operation, reducing latency. */
+       write operation by the hardware, reducing latency. */
     case NFR_OP_WRITE:
     { 
       uint8_t ctxIdx, wctxIdx;
@@ -76,6 +76,7 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
       bu->bufferIndex   = tiw->remoteMem->index;
       bu->payloadSize   = ti->length;
       bu->payloadOffset = tiw->remoteOffset;
+      bu->udata         = ti->udata;
 
       assert(bu->bufferIndex < NETFR_MAX_MEM_REGIONS);
 
@@ -116,10 +117,7 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
     {
       ctx = nfr_ContextGet(res, NFR_OP_RECV, 0);
       if (!ctx)
-      {
-        // NFR_LOG_TRACE("Receive context unavailable");
         return -EAGAIN;
-      }
 
       ret = fi_recv(ep, ctx->slot->data, NETFR_MESSAGE_MAX_SIZE,
                     fi_mr_desc(res->commBuf.memRegion->mr), 0, ctx);
@@ -148,7 +146,7 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
         NFR_RESET_CONTEXT(ti->context);
         return ret;
       }
-      return 0;
+      break;
     }
     case NFR_OP_SEND_COPY:
     {
@@ -172,6 +170,7 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
         NFR_RESET_CONTEXT(ctx);
         return ret;
       }
+      break;
     }
     case NFR_OP_INJECT:
     {
@@ -197,7 +196,6 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
           return ret2;
         }
       }
-
       break;
     }
     default:
@@ -220,6 +218,8 @@ ssize_t nfr_PostTransfer(struct NFRResource * res, struct NFR_TransferInfo * ti)
  * @brief Free supporting resources associated with an RDMA memory region, and
  *        if the memory region is internal, free the memory buffer.
  *
+ * @warning Never use normal free() on RDMA-allocated memory regions!
+ * 
  * This function performs tasks such as page-unpinning, closing the MR and
  * freeing the NFRMemory structure.
  *
@@ -236,7 +236,7 @@ void nfrFreeMemory(PNFRMemory * mem)
 
   if ((*mem)->mr)
     fi_close(&(*mem)->mr->fid);
-  if (!(*mem)->extMem)
+  if (!((*mem)->memType > NFR_MEM_INDEX_EXTERNAL_TYPES) && (*mem)->addr)
     nfr_MemFreeAlign((*mem)->addr);
   
   // We only free if it's not part of the internal memory region array,

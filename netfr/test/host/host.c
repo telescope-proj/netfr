@@ -163,24 +163,13 @@ int main(int argc, char ** argv)
     }
 
     uint32_t len = sizeof(msgBuf); 
-    ret = nfrHostReadData(host, 1, msgBuf, &len);
+    uint64_t udata = 0;
+    ret = nfrHostReadData(host, 1, msgBuf, &len, &udata);
     if (ret < 0 && ret != -EAGAIN)
     {
       fprintf(stderr, "Failed to read data: %d\n", ret);
       goto cleanup;
     }
-
-    // if (ret == 0)
-    // {
-    //   printf("Echoing received message: %s\n", msgBuf);
-    //   ret = nfrHostSendData(host, 1, msgBuf, len);
-    //   if (ret < 0)
-    //   {
-    //     fprintf(stderr, "Failed to send data: %d\n", ret);
-    //     goto cleanup;
-    //   }
-    //   memset(msgBuf, 0, sizeof(msgBuf));
-    // }
 
     sleepMs(1);
   }

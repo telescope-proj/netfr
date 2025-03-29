@@ -44,7 +44,7 @@ struct NFR_CallbackInfo
   NFR_Callback callback;
   /* The user data to be made available to the callback. The elements can refer
      to arbitrary user data, and are not interpreted in any way by the internal
-     queue manager. You can allocate NFR_CallbackInfo on the stack; these values
+     queue manager. You can allocate NFR_CallbackInfo on the stack; the values
      of this array are copied into the context when the operation is posted.
 
      When the callback is invoked, the context, which contains the uData array,
@@ -85,20 +85,40 @@ struct NFRExtCMEntry {
 	uint8_t			     data[NETFR_CM_MESSAGE_MAX_SIZE];
 };
 
+enum NFRMemoryType
+{
+  NFR_MEM_TYPE_INTERNAL,
+  
+  NFR_MEM_INDEX_SYSTEM_TYPES,
+  NFR_MEM_TYPE_SYSTEM_MANAGED,
+  NFR_MEM_TYPE_SYSTEM_MANAGED_DMABUF,
+
+  NFR_MEM_INDEX_EXTERNAL_TYPES,
+  NFR_MEM_TYPE_USER_MANAGED,
+  NFR_MEM_TYPE_USER_MANAGED_DMABUF
+};
+
+static inline int nfr_MemIsExternal(enum NFRMemoryType type)
+{
+  return type > NFR_MEM_INDEX_EXTERNAL_TYPES;
+}
+
 struct NFRMemory
 {
   struct NFRResource * parentResource;
   void               * addr;
   struct fid_mr      * mr;
+  uint64_t             udata;
   uint64_t             size;
   uint32_t             writeSerial;    // Message id relative to other writes
   uint32_t             channelSerial;  // Message id relative to all messages
   uint32_t             payloadOffset;
   uint32_t             payloadLength;
   uint8_t              index;
-  uint8_t              extMem; // Externally allocated memory
+  uint8_t              memType;       // Memory allocation type
   uint8_t              state;
   uint8_t              refCount;
+  int                  dmaFd;          // DMABUF fd if enabled
 };
 
 struct NFRCommBufInfo

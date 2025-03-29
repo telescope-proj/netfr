@@ -35,8 +35,8 @@ extern "C" {
    storable. */
 #define NETFR_CALLBACK_USER_DATA_COUNT 8
 
-/* Number of independent fabric channels. Currently defined are the primary and
-   secondary low-latency channels. */
+/* Number of independent fabric channels. Currently defined are the primary
+   (high-bandwidth) and secondary (low-latency) channels. */
 #define NETFR_NUM_CHANNELS 2
 
 /* The total number of NetFR-managed memory regions that can be allocated. These
@@ -52,11 +52,6 @@ extern "C" {
    data to pass to the callback. */
 #define NETFR_TOTAL_CONTEXT_COUNT 128
 
-/* The number of slots reserved for metadata operations. These are used to
-   perform infrequent exchanges of large amounts of user-defined metadata, which
-   cannot fit into the standard message slots. */
-#define NETFR_NUM_METADATA_CONTEXTS 1
-
 /* The maximum amount of data which can be exchanged on connection setup via
    the Libfabric connection manager channel. */
 #define NETFR_CM_MESSAGE_MAX_SIZE 16
@@ -64,18 +59,14 @@ extern "C" {
 /* The maximum size of a message including the header (not for RDMA buffers) */
 #define NETFR_MESSAGE_MAX_SIZE 4096
 
-/* The maximum size of a metadata message including the header */
-#define NETFR_METADATA_MAX_SIZE (1 << 21)
+/* The maximum size of user messages, with the header and padding subtracted. */
+#define NETFR_MESSAGE_MAX_PAYLOAD_SIZE (NETFR_MESSAGE_MAX_SIZE - 32)
 
 /* The maximum size of a/an (R)DMA buffer is determined by the provider and
    hardware capabilities for the maximum buffer size that can be handled in a
    single work request. For RDMA, this is typically 1 GiB; we set a limit of 256
    MiB as this covers most use cases. */
 #define NETFR_MAX_BUFFER_SIZE (1 << 28)
-
-/* We want to align the message slots to cache lines, so we leave a bit of
-   extra space for the non-protocol internal metadata to go */
-#define NETFR_MESSAGE_SLOT_META_SIZE 8
 
 /* The number of transmit credits, i.e., the number of messages that can be sent
    before waiting for an acknowledgment. */

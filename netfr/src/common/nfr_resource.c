@@ -429,20 +429,43 @@ int nfr_ResourceOpenSingle(const struct NFRInitOpts * opts,
     flags = FI_SOURCE | FI_NUMERICHOST;
   }
 
-  NFR_LOG_DEBUG("Finding fabric for address %s:%s", node, service);
-  ret = fi_getinfo(opts->apiVersion, node, service, 
-                   flags, hints, &info);
-  hints->src_addr = 0;
-  hints->src_addrlen = 0;
-  hints->dest_addr = 0;
-  hints->dest_addrlen = 0;
-  fi_freeinfo(hints);
-  if (ret < 0)
+  // We first try enabling the FI_HMEM feature, which provides us with the most
+  // flexible DMABUF options. If this fails, we can still use DMABUFs, just
+  // self-allocated ones only and not those allocated by, e.g., the GPU. This
+  // feature requires a relatively new version of libfabric (1.20+).
+  if (fi_version() >= FI_VERSION(1, 20) 
+      && opts->apiVersion >= FI_VERSION(1, 20))
   {
-    NFR_LOG_DEBUG("Unable to find suitable fabric: %s (%d)",
-                  fi_strerror(-ret), ret);
-    goto free_struct;
+    flags |= FI_HMEM;
   }
+
+  NFR_LOG_DEBUG("Finding fabric for address %s:%s", node, service);
+  
+  for (int i = 0; i < 2; ++i)
+  {
+    ret = fi_getinfo(opts->apiVersion, node, service, 
+                     flags, hints, &info);
+    if (ret < 0)
+    {
+      if (flags & FI_HMEM)
+      {
+        NFR_LOG_DEBUG("DMABUF-enabled fabric not found, retrying without");
+        flags &= ~FI_HMEM;
+        continue;
+      }
+
+      NFR_LOG_DEBUG("Unable to find suitable fabric: %s (%d)",
+                    fi_strerror(-ret), ret);
+      hints->src_addr = 0;
+      hints->src_addrlen = 0;
+      hints->dest_addr = 0;
+      hints->dest_addrlen = 0;
+      fi_freeinfo(hints);
+      goto free_struct;
+    }
+    break;
+  }
+  
   assert(info);
 
   // Try all of the available fabrics

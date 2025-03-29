@@ -60,6 +60,7 @@ struct NFR_TransferInfo
   */
   uint8_t  opType;
   uint64_t length;
+  uint64_t udata;
   /* Only used for copied sends */
   void     * data;
   /*  Context pointer.

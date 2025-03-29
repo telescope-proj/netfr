@@ -98,7 +98,7 @@ int main(int argc, char ** argv)
 
   for (int i = 0; i < 300; ++i)
   {
-    ret = nfrClientSessionInit(client);
+    ret = nfrClientConnect(client);
     if (ret < 0 && ret != -EAGAIN)
     {
       fprintf(stderr, "Failed to initialize session: %d\n", ret);
@@ -174,7 +174,7 @@ int main(int argc, char ** argv)
     if (getTimeMsec() - prevSendTime > 1000)
     {
       const char msg[] = "Hello server";
-      ret = nfrClientSendData(client, 1, msg, sizeof(msg));
+      ret = nfrClientSendData(client, 1, msg, sizeof(msg), getTimeMsec());
       if (ret < 0)
       {
         fprintf(stderr, "Failed to send data: %d\n", ret);

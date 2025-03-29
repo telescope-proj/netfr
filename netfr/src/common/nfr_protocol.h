@@ -65,9 +65,6 @@ struct NFRHeader
    CPU architectures. */
 #define NETFR_MESSAGE_PAD_SIZE (16 - sizeof(struct NFRHeader) % 16)
 
-/* The maximum size of user messages, with the header and padding subtracted. */
-#define NETFR_MESSAGE_MAX_PAYLOAD_SIZE (NETFR_MESSAGE_MAX_SIZE - 32)
-
 inline static void nfr_SetHeader(struct NFRHeader * hdr, uint8_t mType)
 {
   assert(mType < NFR_MSG_MAX);
@@ -108,6 +105,7 @@ struct NFRMsgBufferUpdate
   uint32_t         payloadOffset;
   uint32_t         writeSerial;
   uint32_t         channelSerial;
+  uint64_t         udata;
 };
 
 // NFRMsgBufferState, client -> server
@@ -128,6 +126,7 @@ struct NFR__MsgClientData
 {
   struct NFRHeader header;
   uint32_t         length;
+  uint64_t         udata;
   uint32_t         msgSerial;
   uint32_t         channelSerial;
 };
@@ -136,6 +135,7 @@ struct NFRMsgClientData
 {
   struct NFRHeader header;
   uint32_t         length;
+  uint64_t         udata;
   uint32_t         msgSerial;
   uint32_t         channelSerial;
   uint8_t          padding[32 - sizeof(struct NFR__MsgClientData) % 32];
@@ -155,6 +155,7 @@ struct NFR__MsgHostData
 {
   struct NFRHeader header;
   uint32_t         length;
+  uint64_t         udata;
   uint32_t         msgSerial;
   uint32_t         channelSerial;
 };
@@ -163,6 +164,7 @@ struct NFRMsgHostData
 {
   struct NFRHeader header;
   uint32_t         length;
+  uint64_t         udata;
   uint32_t         msgSerial;
   uint32_t         channelSerial;
   uint8_t          padding[32 - sizeof(struct NFR__MsgHostData) % 32];

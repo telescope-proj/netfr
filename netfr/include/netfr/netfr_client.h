@@ -43,41 +43,48 @@ enum
 
 struct NFRClientEvent
 {
-  /* The type of event received. */
-  uint8_t type;
-
-  /* The index of the channel this message was received on. */
-  uint8_t channelIndex;
-
-  /* The unique incrementing ID of the message. */
-  uint32_t serial;
-
   /* Only valid for NFR_CLIENT_EVENT_MEM_WRITE. The memory region where the
-     message data reside. */
+   * message data reside. */
   PNFRMemory memRegion;
 
+  /* The user-defined OOB data associated with the event. */
+  uint64_t udata;
+  
+  /* The unique incrementing ID of the message. */
+  uint32_t serial;
+  
   /* Only valid for NFR_CLIENT_EVENT_MEM_WRITE. The offset between the start of
-     the memory region and the payload. The entire memory region is, however,
-     available for the (local) user to read and write until releasing this
-     region. */
+   * the memory region and the payload. The entire memory region is, however,
+   * available for the (local) user to read and write until releasing this
+   * region. */
   uint32_t payloadOffset;
   
   /* The size of the payload in the memory region or inline data, depending on
      the type of event */
   uint32_t payloadLength;
   
+  /* The type of event received. */
+  uint8_t type;
+
+  /* The index of the channel this message was received on. */
+  uint8_t channelIndex;
+
   /* If the event type is NFR_CLIENT_EVENT_DATA, this field will contain
-     the message that was sent over the fabric. */
-  alignas(16) char inlineData[NETFR_MESSAGE_MAX_SIZE];
+   * the message that was sent over the fabric. */
+  alignas(16) char inlineData[NETFR_MESSAGE_MAX_PAYLOAD_SIZE];
 };
 
 /**
  * @brief Attach an existing memory region to the client. This will allow it to
  *        be used for RDMA writes.
  *
- * @warning This function does not support the use of DMABUFs or GPU memory
- *          regions, except when the DMABUF page mappings are stable and reside
- *          in host memory (e.g., KVMFR memory)
+ * @warning Do not use this function for DMABUFs. Use nfrClientAllocDMABUF
+ *          instead, as it ensures the memory region it creates is properly
+ *          pinned and registered for RDMA operations.
+ *
+ *          One exception to this rule is memory pointing to DMABUFs allocated
+ *          by kernel modules such as KVMFR, which do not change physical page 
+ *          mappings.
  *
  * @note For optimal performance, the memory region should be page-aligned. If
  *       huge pages are used, the memory region should be aligned to the huge
@@ -85,11 +92,11 @@ struct NFRClientEvent
  *       set to `1`.
  *
  * @param client  Client handle
- * 
+ *
  * @param buffer  Memory region
- * 
+ *
  * @param size    Size of the memory region
- * 
+ *
  * @param index   The channel index to make the memory region available on
  *
  * @return PNFRMemory 
@@ -97,6 +104,23 @@ struct NFRClientEvent
 PNFRMemory nfrClientAttachMemory(PNFRClient client, void * buffer,
                                  uint64_t size, uint8_t index);
 
+/**
+ * @brief Allocate memory to be used with RDMA writes.
+ *
+ * @warning This specific call must be used to allocate DMABUFs for use with
+ *          RDMA operations. If you use the nfrClientAttachMemory function with
+ *          your own DMABUF, it is not guaranteed that RDMA operations will
+ *          work correctly.
+ *
+ * @param client  Client handle
+ *
+ * @param size    Size of the memory region
+ *
+ * @param index   The channel index to make the memory region available on
+ *
+ * @return PNFRMemory 
+ */
+PNFRMemory nfrClientAllocDMABUF(PNFRClient client, uint64_t size, uint8_t index);
 
 /**
  * @brief Check for incoming messages and progress background operations.
@@ -129,13 +153,13 @@ int nfrClientProcess(PNFRClient client, int index, struct NFRClientEvent * evt);
  *
  *               ``-ECONNREFUSED`` if the connection was refused by the server
  */
-int nfrClientSessionInit(PNFRClient client);
+int nfrClientConnect(PNFRClient client);
 
 /**
  * @brief Initialize a client handle. 
  *
  * This does not yet connect to the server, but prepares all of the resources
- * necessary to do so. Use the nfrClientSessionInit function to initiate a
+ * necessary to do so. Use the nfrClientConnect function to initiate a
  * connection.
  *
  * @param opts      Network options
@@ -170,10 +194,16 @@ void nfrClientFree(PNFRClient * res);
  * @param length     Length of the data, limited to
  *                   ``NETFR_MESSAGE_MAX_PAYLOAD_SIZE``
  *
- * @return           0 on success, negative on error 
+ * @param udata      User data to associate with the message
+ *
+ * @return           0 on success, negative on error
+ *
+ *                   ``-ENOBUFS`` if the message length is too long. Generally
+ *                   speaking, if you are hitting this limit, the RDMA write
+ *                   mechanism should be used instead.
  */
-int nfrClientSendData(struct NFRClient * client, int channelID, const void * data,
-                      uint32_t length);
+int nfrClientSendData(struct NFRClient * client, int channelID, 
+                      const void * data, uint32_t length, uint64_t udata);
 
 #ifdef __cplusplus
 }

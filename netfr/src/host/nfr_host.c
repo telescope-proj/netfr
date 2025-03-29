@@ -114,7 +114,7 @@ int nfr_HostChannelProcess(struct NFRHostChannel * ch,
 }
 
 int nfrHostReadData(struct NFRHost * host, int channelID, void * data,
-                    uint32_t * maxLength)
+                    uint32_t * maxLength, uint64_t * udata)
 {
   assert(host);
   assert(data);
@@ -157,6 +157,7 @@ int nfrHostReadData(struct NFRHost * host, int channelID, void * data,
 
       memcpy(data, msg->data, msg->length);
       *maxLength = msg->length;
+      *udata     = msg->udata;
 
       NFR_RESET_CONTEXT(cb->ctx + i);
 
@@ -190,8 +191,8 @@ int nfrHostReadData(struct NFRHost * host, int channelID, void * data,
   return -EAGAIN;
 }
 
-int nfrHostSendData(struct NFRHost * host, int channelID, void * data, 
-                    uint32_t length)
+int nfrHostSendData(PNFRHost host, int channelID, const void * data, 
+                    uint32_t length, uint64_t udata)
 {
   assert(host);
   assert(data);
@@ -201,15 +202,14 @@ int nfrHostSendData(struct NFRHost * host, int channelID, void * data,
   if (!host || !data || channelID < 0 || channelID >= NETFR_NUM_CHANNELS)
     return -EINVAL;
 
-  if (length >= NETFR_MESSAGE_MAX_PAYLOAD_SIZE)
+  if (length > NETFR_MESSAGE_MAX_PAYLOAD_SIZE)
     return -ENOBUFS;
 
   struct NFRHostChannel * ch = host->channels + channelID;
   if (ch->res->txCredits < NETFR_RESERVED_CREDIT_COUNT)
   {
     NFR_LOG_DEBUG("No%scredits on channel %d", 
-                  ch->res->txCredits < NETFR_RESERVED_CREDIT_COUNT ? " low-prio " : " ",
-                  channelID);
+                  ch->res->txCredits ? " low-prio " : " ", channelID);
     return -EAGAIN;
   }
 
@@ -225,6 +225,7 @@ int nfrHostSendData(struct NFRHost * host, int channelID, void * data,
   msg->length        = length;
   msg->channelSerial = ++ch->channelSerial;
   msg->msgSerial     = ++ch->msgSerial;
+  msg->udata         = udata;
   memcpy(msg->data, data, length);
 
   struct NFR_CallbackInfo cbInfo = {0};
@@ -467,7 +468,8 @@ PNFRMemory nfrHostAttachMemory(PNFRHost host, void * buffer,
   // We don't need to perform the sync as the host, so we immediately set the
   // state to available
   PNFRMemory mem = nfr_RdmaAttach(host->channels[index].res, buffer, size,
-                                  FI_READ | FI_WRITE | FI_REMOTE_WRITE, 1,
+                                  FI_READ | FI_WRITE | FI_REMOTE_WRITE,
+                                  NFR_MEM_TYPE_USER_MANAGED,
                                   MEM_STATE_AVAILABLE);
   if (mem)
     mem->state = MEM_STATE_AVAILABLE;

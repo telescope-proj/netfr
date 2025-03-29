@@ -40,10 +40,12 @@ extern "C" {
  *                      than the buffer, the function will return -ENOBUFS,
  *                      but maxLength will still be set.
  * 
+ * @param udata         User data associated with the message
+ * 
  * @return              0 on success, negative error code on failure
  */
-int nfrHostReadData(PNFRHost host, int channelID, void * data,
-                    uint32_t * maxLength);
+int nfrHostReadData(struct NFRHost * host, int channelID, void * data,
+                    uint32_t * maxLength, uint64_t * udata);
 
 /**
  * @brief Send data to the client
@@ -61,8 +63,8 @@ int nfrHostReadData(PNFRHost host, int channelID, void * data,
  *
  * @return              0 on success, negative error code on failure                     
  */
-int nfrHostSendData(PNFRHost host, int channelID, void * data, 
-                    uint32_t length);
+int nfrHostSendData(PNFRHost host, int channelID, const void * data, 
+                    uint32_t length, uint64_t udata);
 
 /**
  * @brief Perform background processing tasks. 

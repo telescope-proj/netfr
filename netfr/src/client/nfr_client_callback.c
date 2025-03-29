@@ -75,6 +75,7 @@ void nfr_ClientProcessInternalRx(struct NFRFabricContext * ctx)
       mem->payloadLength = update->payloadSize;
       mem->writeSerial   = update->writeSerial;
       mem->channelSerial = update->channelSerial;
+      mem->udata         = update->udata;
       NFR_RESET_CONTEXT(ctx);
       return;
     }

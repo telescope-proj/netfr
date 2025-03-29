@@ -23,7 +23,7 @@
 
 int nfr_LogLevel = NFR_LOG_LEVEL_OFF;
 
-unsigned long getTimestamp()
+unsigned long getTimestamp(void)
 {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);

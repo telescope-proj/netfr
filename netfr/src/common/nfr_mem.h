@@ -22,13 +22,26 @@
 #define NETFR_PRIVATE_MEM_H
 
 #ifdef _WIN32
-#include <sysinfoapi.h>
+  #include <sysinfoapi.h>
 #else
-#include <unistd.h>
+  #include <unistd.h>
 #endif
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
+
+#ifdef __linux__
+  #include <linux/udmabuf.h>
+  #include <sys/types.h>
+  #include <sys/ioctl.h>
+  #include <sys/mman.h>
+  #include <fcntl.h>
+#else
+  #ifdef NETFR_ENABLE_DMABUF_REGISTRATION
+    #error "DMABUF registration is not supported on this platform"
+  #endif
+#endif
 
 #include "netfr/netfr.h"
 #include "common/nfr_resource.h"
@@ -79,16 +92,19 @@ void nfr_MemFreeAlign(void * ptr);
 PNFRMemory nfr_RdmaAttach(struct NFRResource * res, void * addr, uint64_t size,
                           uint64_t acs, uint8_t externalMem,
                           uint8_t initialState);
-
+                           
 
 /**
- * @brief Release the buffer for reuse. This does not free the memory buffer -
- *        only signals that you as the user have read the data and the memory
- *        region can be reused.
- *
- * @param mem Memory region to release
+ * @brief Allocate a pinned memory region for use with DMABUF and RDMA.
+ * 
+ * @param res   Fabric resource to attach memory to
+ * @param size  Address of the memory buffer
+ * @param acs   Access control flags
+ * 
+ * @return PNFRMemory handle on success, 0 on failure
  */
-void nfrReleaseBuffer(PNFRMemory * mem);
+PNFRMemory nfr_RdmaAllocDMABUF(struct NFRResource * res, uint64_t size,
+                               uint64_t acs);
 
 /**
  * @brief Allocate RDMA-enabled host memory. Registration is handled internally.
